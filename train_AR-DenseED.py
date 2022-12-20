@@ -97,7 +97,7 @@ kwargs = {'num_workers': 0,'pin_memory': True} if th.cuda.is_available() else {}
 
 # load training data
 # N x Nc x H x W, N: Number of samples, Nc: Number of input/output channels, H x W: image size
-hdf5_dir = args.data_dir + "/data_pollutant"#"/afs/crc.nd.edu/user/s/smo/invers_mt3d/raw2/lsx4_lsy2_var0.5_smax8_D1r0.1/kle{}_lhs{}".format(args.kle_terms,args.n_train)
+hdf5_dir = args.data_dir + "/data_pollutant"
 x_train, y_train, train_stats, train_loader = load_data_ar(hdf5_dir, args, kwargs, 'train')
 
 # load test data
@@ -175,7 +175,6 @@ def test(epoch, plot_intv):
                 y_target[:ntimes] = y[:,[0]]  # the concentration fields for one input conductivity fields at ntimes time steps
                 y_pred = np.full( (ntimes,1,y_train.shape[2],y_train.shape[3]), 0.0)
                 y_pred[:ntimes] = y_output[:,[0]]
-                #y_pred[ntimes] = y_output[[0],[0]]
                 
                 plot_pred_ar(i, y_target, y_pred, ntimes, epoch, idx, output_dir)
 
@@ -217,8 +216,6 @@ def cal_R2():
                 y_hat = model(x_ii_tensor)
             y_hat = y_hat.data.cpu().numpy()
             y_output[ii,0] = y_hat[0,0]
-            # if ii == ntimes - 1:
-            #     y_output[ii+1,0] = y_hat[0,1]
             y_ii_1 = y_hat[0,0,:,:]
         nominator = nominator + ((y - y_output)**2).sum()
         denominator = denominator + ((y - y_mean)**2).sum()
@@ -226,38 +223,6 @@ def cal_R2():
     R2 = 1 - nominator/denominator
     print("R2: {}".format(R2))
     return R2
-
-#find the maximum absolute prediction error at Nt concentration fields in each test sample,
-#i.e., the results shown in Figure 13 of the paper
-def max_err():
-    n_test = args.n_test
-    ErrMax = np.zeros((n_test))
-    for i in range(n_test):
-        x = x_test[ i * ntimes: (i+1) * ntimes]
-        y = np.full( (ntimes,1,y_train.shape[2],y_train.shape[3]), 0.0)
-        y[:ntimes] = y_test[i * ntimes: (i+1) * ntimes,[0]] # concentration at n_t time instances
-
-        y_output = np.full( (ntimes, 1,y_train.shape[2],y_train.shape[3]), 0.0)
-        x_ii = np.full((1,x_test.shape[1],y_train.shape[2],y_train.shape[3]), 0.0)
-        y_ii_1 = x[0,0,:,:]     # initial concentration
-        for ii in range(ntimes):
-            x_ii[0,0,:,:] = y_ii_1        # the ii_th predicted output
-            x_ii[0,1,:,:] = x[ii,1,:,:]   # exponent coefficient
-            x_ii[0,2,:,:] = x[ii,2,:,:]   # velocity of advection
-            x_ii_tensor = (th.FloatTensor(x_ii)).to(device)
-            model.eval()
-            with th.no_grad():
-                y_hat = model(x_ii_tensor)
-            y_hat = y_hat.data.cpu().numpy()
-            y_output[ii,0] = y_hat[0,0]
-            y_ii_1 = y_hat[0,0,:,:]
-        err = np.abs(y - y_output)
-
-        ErrMax[i] = ( ( err.max(axis=1) ).max(axis=1) ).max(axis=1)
-
-    np.savetxt(exp_dir +'/TestErrMax_ntrain{}.dat'.format(args.n_train), ErrMax, fmt='%10.4f')   # use exponential notation
-    return None
-
 
 # # * * * Uncomment the following lines to test using pretrained model * * * # #
 # print('start predicting...')
@@ -329,4 +294,3 @@ R2_test_s = cal_R2()
 R2_test_self.append(R2_test_s)
 np.savetxt(exp_dir + "/R2_test_self.txt", R2_test_self)
 
-#max_err()
